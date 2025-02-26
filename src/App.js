@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-
+import { Card } from './components/Card';
 const socket = io('http://localhost:5000');
 
 function UnoGame() {
@@ -32,13 +32,14 @@ function UnoGame() {
       {loading ? (
         <p>Loading deck...</p>
       ) : (
-        <ul>
+        <div>
           {(deck || []).map((card, index) => (
-            <li key={index}>
-              {card.color} {card.value}
-            </li>
+            <Card card={card} key={index} />
+            // <li key={index}>
+            //   {card.color} {card.value}
+            // </li>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

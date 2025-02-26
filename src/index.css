@@ -11,3 +11,45 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.card-container {
+  color: black;
+  border: 1px solid black;
+  max-width: 240px;
+  border-radius: 2rem;
+  /* padding: 1rem; */
+}
+.card-wrapper {
+  display: grid;
+  min-height: 350px;
+  border: 1rem solid white;
+  border-radius: 2rem;
+  padding: 1rem;
+  font-size: 2rem;
+  color: white;
+  overflow: hidden;
+}
+
+.card-body {
+  justify-self: center;
+  align-self: center;
+  font-size: 6rem;
+  position: relative;
+  height: 100%;
+}
+
+.card-background {
+  padding: 4.5rem 3rem;
+  border-radius: 50%;
+  transform: rotate(45deg);
+  background: white;
+}
+
+.card-value {
+  transform: rotate(-45deg);
+}
+
+.card-footer {
+  justify-self: end;
+  align-self: end;
+}
