@@ -1,0 +1,21 @@
+{
+  "name": "uno-app",
+  "version": "1.0.0",
+  "description": "The bizz",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "react": "^19.0.0",
+    "socket.io": "^4.8.1",
+    "yarn": "^1.22.22"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate": "^6.0.5"
+  }
+}
