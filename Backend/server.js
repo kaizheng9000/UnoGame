@@ -4,7 +4,7 @@ const { Server } = require('socket.io');
 const gameRoutes = require('./Routes/GameRoutes');
 const GameController = require('./Controllers/GameController');
 
-const port = 3000;
+const port = 5000;
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
