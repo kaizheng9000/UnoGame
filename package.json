@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start-server": "cd ./Backend && node server.js",
-    "start-client": "vite start",
+    "start-client": "vite",
     "dev": "concurrently \"npm run start-server\" \"npm run start-client\"",
     "build": "vite build",
     "test": "vite test",
