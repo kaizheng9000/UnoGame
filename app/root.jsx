@@ -4,7 +4,7 @@ import { GameButton } from '../src/components/Buttons.jsx';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
 import GameController from '../Backend/Controllers/GameController.js';
-import { LiveReload, Outlet, useLoaderData } from '@remix-run/react';
+import { Scripts, Outlet, useLoaderData } from '@remix-run/react';
 const socket = io('http://localhost:5000');
 
 export async function loader() {
@@ -38,8 +38,14 @@ function UnoGame() {
   }, []);
 
   return (
-    <MantineProvider>
-      {/* <div>
+    <html lang='en'>
+      <head>
+        <meta charSet='utf-8' />
+        <meta name='viewport' content='width=device-width, initial-scale=1' />
+      </head>
+      <body>
+        <MantineProvider>
+          {/* <div>
         <h1>UNO Game</h1>
         <GameButton
           buttonName={'Host Game'}
@@ -62,9 +68,11 @@ function UnoGame() {
         )}
       </div> */}
 
-      <Outlet />
-      <LiveReload />
-    </MantineProvider>
+          <Outlet />
+          <Scripts />
+        </MantineProvider>
+      </body>
+    </html>
   );
 }
 
