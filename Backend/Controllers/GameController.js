@@ -1,5 +1,4 @@
-const Deck = require('../Models/UnoDeck');
-
+import Deck from '../Models/UnoDeck.js';
 class GameController {
   constructor() {
     this.deck = new Deck();
@@ -11,4 +10,4 @@ class GameController {
   }
 }
 
-module.exports = new GameController();
+export default GameController;
