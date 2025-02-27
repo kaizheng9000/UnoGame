@@ -15,7 +15,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@mantine/core": "^7.17.0",
+    "@mantine/dates": "^7.17.0",
+    "@mantine/form": "^7.17.0",
+    "@mantine/hooks": "^7.17.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "dayjs": "^1.11.13",
     "express": "^4.21.2",
     "motion": "^12.4.7",
     "react": "^19.0.0",

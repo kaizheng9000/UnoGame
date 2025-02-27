@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { GameButton } from './components/Buttons';
+import '@mantine/core/styles.css';
+import { MantineProvider } from '@mantine/core';
 
 const socket = io('http://localhost:5000');
 console.log('HELLO');
@@ -33,28 +35,30 @@ function UnoGame() {
   console.log('Deck:', deck);
 
   return (
-    <div>
-      <h1>UNO Game</h1>
-      <GameButton
-        buttonName={'Host Game'}
-        doOnClick={() => {
-          {
-            ('Hosting');
-          }
-        }}
-      ></GameButton>
-      {loading ? (
-        <p>Loading deck...</p>
-      ) : (
-        <ul>
-          {(deck || []).map((card, index) => (
-            <li key={index}>
-              {card.color} {card.value}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <MantineProvider>
+      <div>
+        <h1>UNO Game</h1>
+        <GameButton
+          buttonName={'Host Game'}
+          doOnClick={() => {
+            {
+              ('Hosting');
+            }
+          }}
+        ></GameButton>
+        {loading ? (
+          <p>Loading deck...</p>
+        ) : (
+          <ul>
+            {(deck || []).map((card, index) => (
+              <li key={index}>
+                {card.color} {card.value}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </MantineProvider>
   );
 }
 
