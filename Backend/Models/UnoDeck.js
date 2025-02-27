@@ -4,6 +4,7 @@ class UnoDeck {
     this.shuffle();
   }
 
+  /** Creates all cards in a standard uno deck */
   generateDeck() {
     const colors = ['red', 'blue', 'green', 'yellow'];
     const specialCards = ['skip', 'reverse', 'draw two'];
@@ -31,6 +32,7 @@ class UnoDeck {
     return deck;
   }
 
+  /** Shuffles this deck using Fisher-Yates algorithm */
   shuffle() {
     for (let i = this.cards.length - 1; i > 0; i--) {
       let j = Math.floor(Math.random() * (i + 1));
