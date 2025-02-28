@@ -1,6 +1,6 @@
 import { Button } from '@mantine/core';
 
-export function GameButton({ buttonName, doOnClick }) {
+export function HomePageButton({ buttonName, doOnClick = () => {} }: Props) {
   return (
     <div className='flex flex-col items-center gap-4 p-4'>
       <Button
@@ -11,4 +11,9 @@ export function GameButton({ buttonName, doOnClick }) {
       </Button>
     </div>
   );
+}
+
+interface Props {
+  buttonName: string;
+  doOnClick?: () => void;
 }

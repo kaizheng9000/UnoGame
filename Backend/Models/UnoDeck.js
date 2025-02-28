@@ -45,4 +45,4 @@ class UnoDeck {
   }
 }
 
-module.exports = UnoDeck;
+export default UnoDeck;

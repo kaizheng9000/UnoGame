@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { GameButton } from './components/Buttons';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
+import GameController from '/Backend/Controllers/GameController.js';
+import { Scripts, Outlet, useLoaderData } from '@remix-run/react';
 
 const socket = io('http://localhost:5000');
-console.log('HELLO');
+
+export async function loader() {
+  const controller = new GameController();
+  const deck = controller.getDeck();
+  return deck;
+}
 
 function UnoGame() {
+  const data = useLoaderData();
   const [deck, setDeck] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    socket.on('connect', () => {
-      console.log('CONNECTED TO SOCKET.IO');
-    });
-
     const handleDeckUpdate = shuffledDeck => {
       if (Array.isArray(shuffledDeck.cards)) {
         setDeck(shuffledDeck.cards);
@@ -32,11 +35,15 @@ function UnoGame() {
     };
   }, []);
 
-  console.log('Deck:', deck);
-
   return (
-    <MantineProvider>
-      <div>
+    <html lang='en'>
+      <head>
+        <meta charSet='utf-8' />
+        <meta name='viewport' content='width=device-width, initial-scale=1' />
+      </head>
+      <body>
+        <MantineProvider>
+          {/* <div>
         <h1>UNO Game</h1>
         <GameButton
           buttonName={'Host Game'}
@@ -57,8 +64,13 @@ function UnoGame() {
             ))}
           </ul>
         )}
-      </div>
-    </MantineProvider>
+      </div> */}
+
+          <Outlet />
+          <Scripts />
+        </MantineProvider>
+      </body>
+    </html>
   );
 }
 
