@@ -1,39 +1,44 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import path from 'path';
 import cors from 'cors';
-import GameController from './Controllers/GameController.js';
+import { createRequestHandler } from '@remix-run/node';
+import * as build from '../build/server/index.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// const express = require('express');
-// const { createServer } = require('http');
-// const { Server } = require('socket.io');
-// const path = require('path');
-// const cors = require('cors');
-// const gameRoutes = require('./Routes/GameRoutes');
-// const GameController = require('./Controllers/GameController');
 const port = 5000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*' },
-  serveClient: false /* dont need the client bundle to be exposed  */,
 });
-const controller = new GameController();
 
 // Backend API exposure
 app.use(express.json());
-
 app.use(cors());
+app.use(express.static('build/client'));
+app.all('*', createRequestHandler({ build }));
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../index.html'));
-});
+// Serve static files (public folder)
+app.use(express.static(path.join(__dirname, '../public')));
 
 io.on('connection', socket => {
-  console.log('A client has connected');
-  socket.emit('sendDeck', controller.getDeck());
+  console.log('A client has connected', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('Client has disconnected');
+  });
 });
+
+app.all(
+  '*',
+  createRequestHandler({
+    getLoadContext: () => ({ io }), // Inject Socket.IO into the context
+  }),
+);
 
 httpServer.listen(port, () => {
   console.log(`Server is listening on port: ${port}`);

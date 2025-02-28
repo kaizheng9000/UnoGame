@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { GameButton } from '../src/components/Buttons.jsx';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
-import GameController from '../Backend/Controllers/GameController.js';
+import GameController from '/Backend/Controllers/GameController.js';
 import { Scripts, Outlet, useLoaderData } from '@remix-run/react';
+
 const socket = io('http://localhost:5000');
 
 export async function loader() {
@@ -15,7 +15,6 @@ export async function loader() {
 
 function UnoGame() {
   const data = useLoaderData();
-  console.log(data.cards);
   const [deck, setDeck] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +29,6 @@ function UnoGame() {
     };
 
     socket.on('sendDeck', handleDeckUpdate);
-    console.log(deck);
 
     return () => {
       socket.off('sendDeck', handleDeckUpdate);
