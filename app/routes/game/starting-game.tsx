@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
-import GameController from '/Backend/Controllers/GameController.js';
+import GameController from '../../../backend/controllers/gameController.js';
 import { Scripts, Outlet, useLoaderData } from '@remix-run/react';
 
 const socket = io('http://localhost:5000');

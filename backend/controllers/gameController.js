@@ -1,4 +1,4 @@
-import Deck from '../Models/UnoDeck.js';
+import Deck from '../models/unoDeck.js';
 class GameController {
   constructor() {
     this.deck = new Deck();
