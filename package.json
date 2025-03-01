@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "remix vite:build",
-    "dev": "concurrently \"node ./Backend/server.js\" \"remix vite:dev\"",
+    "dev": "concurrently \"nodemon ./Backend/server.js\" \"remix vite:dev\"",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "start": "node ./Backend/server.js",
     "typecheck": "tsc"
@@ -20,6 +20,7 @@
     "concurrently": "^9.1.2",
     "dayjs": "^1.11.13",
     "isbot": "^4.1.0",
+    "nodemon": "^3.1.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io": "^4.8.1",
