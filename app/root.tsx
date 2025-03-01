@@ -3,11 +3,16 @@
 import { MantineProvider } from '@mantine/core';
 import { Scripts, Outlet } from '@remix-run/react';
 
-function Layout() {
+export default function Layout() {
   return (
-    <MantineProvider>
-      <Outlet />
-      <Scripts />
-    </MantineProvider>
+    <html>
+      <head></head>
+      <body>
+        <MantineProvider>
+          <Outlet />
+          <Scripts />
+        </MantineProvider>
+      </body>
+    </html>
   );
 }
