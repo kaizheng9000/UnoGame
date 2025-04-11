@@ -1,19 +1,29 @@
 import { Button } from '@mantine/core';
 
-export function HomePageButton({ buttonName, doOnClick = () => {} }: Props) {
+export function HomePageButton({
+  buttonName,
+  icon,
+  onClick = () => {},
+}: Props) {
   return (
-    <div className='flex flex-col items-center gap-4 p-4'>
-      <Button
-        className='w-40 bg-blue-500 text-white hover:bg-blue-700 p-2 rounded-lg'
-        onClick={doOnClick}
-      >
-        {buttonName}
-      </Button>
-    </div>
+    <Button
+      className='button'
+      variant='gradient'
+      gradient={{ from: 'blue', to: 'cyan', deg: 90 }}
+      size='xl'
+      radius='md'
+      color='black'
+      leftSection={icon}
+      justify='start'
+      onClick={onClick}
+    >
+      {buttonName}
+    </Button>
   );
 }
 
 interface Props {
   buttonName: string;
-  doOnClick?: () => void;
+  onClick?: () => void;
+  icon?: React.ReactNode;
 }
