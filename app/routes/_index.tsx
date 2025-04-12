@@ -1,9 +1,11 @@
 // This needs to be the home page
 
 import { Users, UserPlus, HelpCircle, Settings } from 'lucide-react';
-import { Button, MantineProvider, Text } from '@mantine/core';
+import { Button, MantineProvider, Text, TextInput, Group } from '@mantine/core';
 import { HomePageButton } from '~/components/homePageButtons';
 import '../css/index.css';
+import { BaseModal } from '~/components/baseModal';
+import { BaseForm } from '~/components/baseForrm';
 
 export default function HomePage() {
   return (
@@ -36,7 +38,59 @@ export default function HomePage() {
 
         {/* Join and Create room buttons */}
         <div className='homePageButtons'>
-          <HomePageButton
+          <BaseModal
+            title='Join Information'
+            buttonName='Join Room'
+            icon={<Users size={28} />}
+          >
+            <BaseForm
+              fields={[
+                {
+                  name: 'playerName',
+                  label: 'Player Name',
+                  placeholder: 'Enter the name you want displayed',
+                  required: true,
+                },
+                {
+                  name: 'roomCode',
+                  label: 'Room Code',
+                  placeholder: 'Enter Room Code Here',
+                  required: true,
+                },
+              ]}
+            ></BaseForm>
+          </BaseModal>
+
+          <BaseModal
+            title='Room Information'
+            buttonName='Create Room'
+            icon={<UserPlus size={28} />}
+          >
+            <BaseForm
+              fields={[
+                {
+                  name: 'roomName',
+                  label: 'Room Name',
+                  placeholder: 'Enter the name of the room',
+                  required: true,
+                },
+                {
+                  name: 'roomCode',
+                  label: 'Room Code',
+                  placeholder: 'Enter Room Code Here',
+                  required: false,
+                },
+                {
+                  name: 'maxPlayers',
+                  label: ' Maximum Number of Players',
+                  type: 'select',
+                  data: ['2', '3', '4', '5', '6', '7', '8'],
+                  required: true,
+                },
+              ]}
+            ></BaseForm>
+          </BaseModal>
+          {/* <HomePageButton
             buttonName='Join Room'
             icon={<Users size={28} />}
             onClick={() => console.log('Join button clicked')}
@@ -46,7 +100,7 @@ export default function HomePage() {
             buttonName='Create Room'
             icon={<UserPlus size={28} />}
             onClick={() => console.log('Create button clicked')}
-          ></HomePageButton>
+          ></HomePageButton> */}
         </div>
       </div>
     </MantineProvider>
