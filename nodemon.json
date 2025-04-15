@@ -1,0 +1,8 @@
+{
+    "execMap": {
+      "ts": "ts-node"
+    },
+    "watch": ["Backend/**/*.ts", "Backend/**/*.tsx"],
+    "ext": "ts,tsx"
+  }
+  

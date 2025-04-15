@@ -1,0 +1,21 @@
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  app:
+    container_name: uno-app
+    build:
+      context: .
+    command: yarn dev
+    volumes:
+      - .:/app
+      - /app/node_modules  # isolate container's node_modules
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis

@@ -1,11 +1,32 @@
-import { Checkbox, TextInput, Group, Button, Select } from '@mantine/core';
+import { TextInput, Group, Button, Select } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useNavigate } from '@remix-run/react';
+
+interface Props {
+  fields: FieldsConfig[];
+  validation?: object;
+  onSubmit?: (values: Record<string, string>) => void; // TODO: Remove the optional after testing
+  submitLabel?: string;
+  method?: 'post' | 'get';
+  action?: string;
+}
+
+interface FieldsConfig {
+  name: string;
+  label: string;
+  placeholder?: string;
+  type?: 'text' | 'select';
+  required?: boolean;
+  data?: string[];
+}
 
 export function BaseForm({
   fields,
   validation,
-  onSubmit,
+  onSubmit = values => console.log(values),
   submitLabel = 'Submit',
+  method = 'post',
+  action,
 }: Props) {
   const initialValues = fields.reduce((acc, field) => {
     acc[field.name] = '';
@@ -19,7 +40,7 @@ export function BaseForm({
   });
 
   return (
-    <form onSubmit={form.onSubmit(values => console.log(values))}>
+    <form method={method} action={action} onSubmit={form.onSubmit(onSubmit)}>
       {fields.map(field => {
         if (field.type === 'select') {
           return (
@@ -51,20 +72,4 @@ export function BaseForm({
       </Group>
     </form>
   );
-}
-
-interface Props {
-  fields: FieldsConfig[];
-  validation?: object;
-  onSubmit?: (values: Record<string, string>) => void; // TODO: Remove the optional after testing
-  submitLabel?: string;
-}
-
-interface FieldsConfig {
-  name: string;
-  label: string;
-  placeholder?: string;
-  type?: 'text' | 'select';
-  required?: boolean;
-  data?: string[];
 }

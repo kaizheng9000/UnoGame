@@ -6,8 +6,25 @@ import { HomePageButton } from '~/components/homePageButtons';
 import '../css/index.css';
 import { BaseModal } from '~/components/baseModal';
 import { BaseForm } from '~/components/baseForrm';
+import { useNavigate } from '@remix-run/react';
+import socket from '../../backend/socket';
+import { useEffect } from 'react';
 
 export default function HomePage() {
+  const navigate = useNavigate();
+
+  const handleCreateRoom = (values: Record<string, string>) => {
+    console.log('Creating room with values:', values);
+
+    // Post to the backend?
+    socket.emit('createRoom', {
+      roomCode: values.roomCode,
+      player: values.playerName,
+    });
+
+    // navigate(`/waitingRoom`);
+  };
+
   return (
     <MantineProvider>
       <div className='homePage'>
@@ -44,6 +61,8 @@ export default function HomePage() {
             icon={<Users size={28} />}
           >
             <BaseForm
+              // this should be a method to get
+              submitLabel='Join'
               fields={[
                 {
                   name: 'playerName',
@@ -67,7 +86,17 @@ export default function HomePage() {
             icon={<UserPlus size={28} />}
           >
             <BaseForm
+              method='post'
+              action='/create-room'
+              onSubmit={handleCreateRoom}
+              submitLabel='Create'
               fields={[
+                {
+                  name: 'playerName',
+                  label: 'Player Name',
+                  placeholder: 'Enter the name you want displayed',
+                  required: true,
+                },
                 {
                   name: 'roomName',
                   label: 'Room Name',
@@ -90,17 +119,6 @@ export default function HomePage() {
               ]}
             ></BaseForm>
           </BaseModal>
-          {/* <HomePageButton
-            buttonName='Join Room'
-            icon={<Users size={28} />}
-            onClick={() => console.log('Join button clicked')}
-          ></HomePageButton>
-
-          <HomePageButton
-            buttonName='Create Room'
-            icon={<UserPlus size={28} />}
-            onClick={() => console.log('Create button clicked')}
-          ></HomePageButton> */}
         </div>
       </div>
     </MantineProvider>

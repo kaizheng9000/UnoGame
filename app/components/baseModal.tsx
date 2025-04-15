@@ -1,6 +1,13 @@
 import { useDisclosure } from '@mantine/hooks';
 import { Modal, Button } from '@mantine/core';
 
+interface Props {
+  title: string;
+  buttonName?: string;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+}
+
 export function BaseModal({ title, buttonName, icon, children }: Props) {
   const [opened, { open, close }] = useDisclosure(false);
 
@@ -25,11 +32,4 @@ export function BaseModal({ title, buttonName, icon, children }: Props) {
       </Button>
     </>
   );
-}
-
-interface Props {
-  title: string;
-  buttonName?: string;
-  icon?: React.ReactNode;
-  children?: React.ReactNode;
 }
