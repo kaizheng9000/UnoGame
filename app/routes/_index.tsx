@@ -2,10 +2,9 @@
 
 import { Users, UserPlus, HelpCircle, Settings } from 'lucide-react';
 import { Button, MantineProvider, Text } from '@mantine/core';
-import { HomePageButton } from '~/components/homePageButtons';
 import '../css/index.css';
-import { BaseModal } from '~/components/baseModal';
-import { BaseForm } from '~/components/baseForm';
+import { BaseModal } from '~/components/ui/BaseModal';
+import { BaseForm } from '~/components/ui/BaseForm';
 import { useNavigate } from '@remix-run/react';
 import socket from '../../backend/socket';
 import { useEffect, useRef, useState } from 'react';
@@ -19,9 +18,9 @@ export default function HomePage() {
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
 
-    socket.on('joinedRoom', ({ roomCode, isHost, roomName, maxPlayers, players }: { roomCode: string; isHost: boolean; roomName: string; maxPlayers: number; players: { id: string; name: string }[] }) => {
+    socket.on('joinedRoom', ({ roomCode, isHost, maxPlayers, players }: { roomCode: string; isHost: boolean; maxPlayers: number; players: { id: string; name: string }[] }) => {
       navigate('/waitingRoom', {
-        state: { roomCode, isHost, playerName: pendingValues.current?.playerName, roomName, maxPlayers, players },
+        state: { roomCode, isHost, playerName: pendingValues.current?.playerName, maxPlayers, players },
       });
     });
 
@@ -40,9 +39,7 @@ export default function HomePage() {
   const handleCreateRoom = (values: Record<string, string>) => {
     pendingValues.current = values;
     socket.emit('createRoom', {
-      roomCode: values.roomCode,
       playerName: values.playerName,
-      roomName: values.roomName,
       maxPlayers: values.maxPlayers,
     });
   };
@@ -129,20 +126,8 @@ export default function HomePage() {
                   required: true,
                 },
                 {
-                  name: 'roomName',
-                  label: 'Room Name',
-                  placeholder: 'Enter the name of the room',
-                  required: true,
-                },
-                {
-                  name: 'roomCode',
-                  label: 'Room Code',
-                  placeholder: 'Enter Room Code Here',
-                  required: false,
-                },
-                {
                   name: 'maxPlayers',
-                  label: ' Maximum Number of Players',
+                  label: 'Maximum Number of Players',
                   type: 'select',
                   data: ['2', '3', '4', '5', '6', '7', '8'],
                   required: true,

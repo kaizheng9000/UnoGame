@@ -16,7 +16,6 @@ export function BaseModal({ title, buttonName, icon, children }: Props) {
       <Modal opened={opened} onClose={close} title={title} size='auto' centered>
         {children}
       </Modal>
-
       <Button
         className='button'
         variant='gradient'

@@ -25,7 +25,6 @@ interface LocationState {
   roomCode: string;
   isHost: boolean;
   playerName: string;
-  roomName: string;
   maxPlayers: number;
   players: Player[];
 }
@@ -59,7 +58,7 @@ export default function WaitingRoom() {
 
   if (!state?.roomCode) return null;
 
-  const { roomCode, isHost, playerName, roomName, maxPlayers } = state;
+  const { roomCode, isHost, playerName, maxPlayers } = state;
   const canStart = players.length >= 2;
 
   const handleStartGame = () => {
@@ -78,10 +77,12 @@ export default function WaitingRoom() {
           backgroundColor: '#252533',
           fontFamily: 'sans-serif',
           gap: '2rem',
+          padding: '1rem',
+          boxSizing: 'border-box',
         }}
       >
         <Title c='white' order={1}>
-          {roomName}
+          {players[0]?.name}'s Room
         </Title>
 
         {/* Room Code */}
@@ -120,7 +121,7 @@ export default function WaitingRoom() {
         <Paper
           p='lg'
           radius='md'
-          style={{ backgroundColor: '#1a1a2e', minWidth: '320px' }}
+          style={{ backgroundColor: '#1a1a2e', width: 'min(360px, 90vw)' }}
         >
           <Text c='dimmed' size='sm' mb='md'>
             Players ({players.length} / {maxPlayers})

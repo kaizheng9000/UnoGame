@@ -1,15 +1,5 @@
 import { TextInput, Group, Button, Select } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useNavigate } from '@remix-run/react';
-
-interface Props {
-  fields: FieldsConfig[];
-  validation?: object;
-  onSubmit?: (values: Record<string, string>) => void; // TODO: Remove the optional after testing
-  submitLabel?: string;
-  method?: 'post' | 'get';
-  action?: string;
-}
 
 interface FieldsConfig {
   name: string;
@@ -18,6 +8,15 @@ interface FieldsConfig {
   type?: 'text' | 'select';
   required?: boolean;
   data?: string[];
+}
+
+interface Props {
+  fields: FieldsConfig[];
+  validation?: object;
+  onSubmit?: (values: Record<string, string>) => void;
+  submitLabel?: string;
+  method?: 'post' | 'get';
+  action?: string;
 }
 
 export function BaseForm({
@@ -33,11 +32,7 @@ export function BaseForm({
     return acc;
   }, {} as Record<string, string>);
 
-  const form = useForm({
-    mode: 'uncontrolled',
-    initialValues,
-    validate: validation,
-  });
+  const form = useForm({ mode: 'uncontrolled', initialValues, validate: validation });
 
   return (
     <form method={method} action={action} onSubmit={form.onSubmit(onSubmit)}>
@@ -66,7 +61,6 @@ export function BaseForm({
           />
         );
       })}
-
       <Group justify='flex-end' mt='md'>
         <Button type='submit'>{submitLabel}</Button>
       </Group>

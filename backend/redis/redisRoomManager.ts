@@ -1,4 +1,4 @@
-import Player from 'backend/models/player';
+import Player from '../game/player';
 import Redis from 'ioredis';
 
 export class RedisRoomManager {
@@ -60,11 +60,11 @@ export class RedisRoomManager {
     return await this.redis.smembers('uno:rooms');
   }
 
-  async setRoomInfo(roomCode: string, info: { roomName: string; maxPlayers: number }): Promise<void> {
+  async setRoomInfo(roomCode: string, info: { maxPlayers: number }): Promise<void> {
     await this.redis.set(`uno:room:${roomCode}:info`, JSON.stringify(info));
   }
 
-  async getRoomInfo(roomCode: string): Promise<{ roomName: string; maxPlayers: number } | null> {
+  async getRoomInfo(roomCode: string): Promise<{ maxPlayers: number } | null> {
     const raw = await this.redis.get(`uno:room:${roomCode}:info`);
     return raw ? JSON.parse(raw) : null;
   }

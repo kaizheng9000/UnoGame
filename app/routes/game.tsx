@@ -1,152 +1,191 @@
 import { useLocation, useNavigate } from '@remix-run/react';
-import { useEffect, useState } from 'react';
-import { MantineProvider, Text, Button, Group, Modal, Stack, Title } from '@mantine/core';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { MantineProvider, Text, Button, Group, Modal, Stack } from '@mantine/core';
 import socket from '../../backend/socket';
-import type { UnoCard } from '../../backend/models/unoDeck';
+import type { UnoCard } from '../../shared/types';
+import { UnoCardFace, CardBack, CARD_COLORS, DIMS } from '../components/cards/UnoCard';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
-interface PlayerInfo {
-  id: string;
-  name: string;
-  cardCount: number;
-}
-
+interface PlayerInfo { id: string; name: string; cardCount: number; }
 interface GameState {
-  hand: UnoCard[];
-  topCard: UnoCard;
-  currentTurn: string;
-  deckCount: number;
-  players: PlayerInfo[];
-  myId: string;
-  roomCode: string;
-  playerName: string;
+  hand: UnoCard[]; topCard: UnoCard; currentTurn: string;
+  deckCount: number; players: PlayerInfo[]; myId: string;
+  roomCode: string; playerName: string;
 }
-
-const CARD_COLORS: Record<string, string> = {
-  red: '#dc2626',
-  blue: '#2563eb',
-  green: '#16a34a',
-  yellow: '#ca8a04',
-  wild: '#312e81',
-};
+interface ClientCard extends UnoCard { _id: string; }
 
 const WILD_COLORS = ['red', 'blue', 'green', 'yellow'] as const;
 
-function cardLabel(card: UnoCard): string {
-  if (typeof card.value === 'number') return String(card.value);
-  switch (card.value) {
-    case 'skip': return 'SKIP';
-    case 'reverse': return 'REV';
-    case 'draw two': return '+2';
-    case 'wild': return 'WILD';
-    case 'wild draw four': return 'W+4';
-    default: return String(card.value);
-  }
+// Compute arc positions for a fan of n cards.
+// maxW constrains the fan radius so it fits within available width.
+function computeFanLayout(n: number, cw: number, ch: number, idealRadius: number, maxAngle: number, maxW = 9999) {
+  if (n === 0) return { positions: [] as { angle: number; x: number; y: number }[], containerW: cw + 20, containerH: ch + 10 };
+  const totalAngle = Math.min(maxAngle, n * 9);
+  const halfRad = (totalAngle / 2) * Math.PI / 180;
+  const sinHalf = Math.sin(halfRad);
+  const fanRadius = sinHalf > 0 ? Math.min(idealRadius, (maxW - cw - 16) / (2 * sinHalf)) : idealRadius;
+  const arcDrop = fanRadius * (1 - Math.cos(halfRad));
+  const containerW = Math.ceil(2 * fanRadius * sinHalf + cw + 16);
+  const containerH = Math.ceil(ch + arcDrop + 8);
+  const positions = Array.from({ length: n }, (_, i) => {
+    const angle = n > 1 ? -totalAngle / 2 + (i * totalAngle) / (n - 1) : 0;
+    const rad = angle * Math.PI / 180;
+    return { angle, x: containerW / 2 - cw / 2 + fanRadius * Math.sin(rad), y: fanRadius * (1 - Math.cos(rad)) };
+  });
+  return { positions, containerW, containerH };
 }
 
-function UnoCardView({
-  card,
-  onClick,
-  disabled,
-  size = 'md',
-}: {
-  card: UnoCard;
-  onClick?: () => void;
-  disabled?: boolean;
-  size?: 'sm' | 'md' | 'lg';
-}) {
-  const bg = CARD_COLORS[card.color] ?? '#312e81';
-  const dims = size === 'lg' ? { w: 90, h: 130, fs: 18 }
-    : size === 'sm' ? { w: 44, h: 64, fs: 11 }
-    : { w: 70, h: 100, fs: 15 };
-  const clickable = !!onClick && !disabled;
-
-  return (
-    <div
-      onClick={clickable ? onClick : undefined}
-      style={{
-        width: dims.w,
-        height: dims.h,
-        backgroundColor: bg,
-        borderRadius: 8,
-        border: '3px solid white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: clickable ? 'pointer' : 'default',
-        opacity: disabled ? 0.45 : 1,
-        flexShrink: 0,
-        userSelect: 'none',
-        transition: 'transform 0.15s',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-      }}
-      onMouseEnter={e => { if (clickable) (e.currentTarget as HTMLElement).style.transform = 'translateY(-10px)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-    >
-      <span style={{ color: 'white', fontWeight: 900, fontSize: dims.fs, textShadow: '0 1px 4px rgba(0,0,0,0.6)', textAlign: 'center' }}>
-        {cardLabel(card)}
-      </span>
-    </div>
-  );
-}
-
-function CardBack({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
-  const dims = size === 'lg' ? { w: 90, h: 130 } : size === 'sm' ? { w: 44, h: 64 } : { w: 70, h: 100 };
-  return (
-    <div style={{
-      width: dims.w, height: dims.h,
-      backgroundColor: '#1e1b4b',
-      borderRadius: 8,
-      border: '3px solid white',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexShrink: 0,
-      boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-    }}>
-      <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>UNO</span>
-    </div>
-  );
+function assignCardIds(incoming: UnoCard[], prev: ClientCard[]): ClientCard[] {
+  const used = new Set<string>();
+  return incoming.map(card => {
+    const match = prev.find(p => !used.has(p._id) && p.color === card.color && p.value === card.value);
+    if (match) { used.add(match._id); return { ...card, _id: match._id }; }
+    return { ...card, _id: Math.random().toString(36).slice(2) };
+  });
 }
 
 export default function GamePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const initialState = location.state as GameState | null;
+  const { isMobile, width: screenW } = useBreakpoint();
+
+  // Responsive sizing
+  const handCardSize = isMobile ? 'sm' : 'md';
+  const centerCardSize = isMobile ? 'md' : 'lg';
+  const cardW = DIMS[handCardSize].w;
+  const cardH = DIMS[handCardSize].h;
+  const centerCardW = DIMS[centerCardSize].w;
+  const centerCardH = DIMS[centerCardSize].h;
 
   const [game, setGame] = useState<GameState | null>(initialState);
+  const [hand, setHand] = useState<ClientCard[]>(() =>
+    initialState?.hand?.map(c => ({ ...c, _id: Math.random().toString(36).slice(2) })) ?? []
+  );
+  const prevHandRef = useRef<ClientCard[]>(hand);
+  const gameRef = useRef<GameState | null>(game);
+  const handRef = useRef<ClientCard[]>(hand);
+  gameRef.current = game;
+  handRef.current = hand;
+
+  // Animation state
+  const [playFly, setPlayFly] = useState<{ card: UnoCard; x: number; y: number; toX: number; toY: number } | null>(null);
+  // Each draw fly has its own entry so multi-card draws animate in parallel with stagger
+  const [drawFlies, setDrawFlies] = useState<{ id: string; x: number; y: number; toX: number; toY: number }[]>([]);
+  // Cards hidden while their fly overlay is in-flight
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  // Cards that just arrived — rendered opacity:0 in the DOM so we can measure their position
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // Signals which card _ids need a fly animation started (read in useLayoutEffect)
+  const pendingToAnimateRef = useRef<string[]>([]);
+
+  // UI state
   const [colorPickCard, setColorPickCard] = useState<UnoCard | null>(null);
   const [winner, setWinner] = useState<string | null>(null);
+  const [lastEffect, setLastEffect] = useState<string | null>(null);
+
+  // DOM refs
+  const discardRef = useRef<HTMLDivElement>(null);
+  const drawRef = useRef<HTMLDivElement>(null);
+  const handContainerRef = useRef<HTMLDivElement>(null);
+  const cardEls = useRef<Map<string, HTMLElement>>(new Map());
+
+  const isMyTurn = game ? game.currentTurn === game.myId : false;
+
+  // Auto-draw when no playable cards
+  useEffect(() => {
+    if (!isMyTurn) return;
+    const timer = setTimeout(() => {
+      const g = gameRef.current;
+      const h = handRef.current;
+      if (!g) return;
+      const hasPlayable = h.some(c => c.type === 'wild' || c.color === g.topCard?.color || c.value === g.topCard?.value);
+      if (!hasPlayable) socket.emit('drawCard', { roomCode: g.roomCode });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [isMyTurn]);
+
+  // After hand updates with new pending cards, measure their DOM positions and start fly animations.
+  // useLayoutEffect fires after DOM mutations but before paint, so cardEls refs are already populated.
+  useLayoutEffect(() => {
+    const toAnimate = pendingToAnimateRef.current;
+    if (toAnimate.length === 0) return;
+    pendingToAnimateRef.current = [];
+
+    const drawEl = drawRef.current;
+    if (!drawEl) return;
+    const dr = drawEl.getBoundingClientRect();
+    const fromX = dr.left + dr.width / 2 - cardW / 2;
+    const fromY = dr.top + dr.height / 2 - cardH / 2;
+
+    toAnimate.forEach((id, i) => {
+      const el = cardEls.current.get(id);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+
+      setTimeout(() => {
+        setDrawFlies(prev => [...prev, { id, x: fromX, y: fromY, toX: rect.left, toY: rect.top }]);
+
+        // After the fly lands, reveal the card and remove the overlay
+        setTimeout(() => {
+          setPendingIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+          setDrawFlies(prev => prev.filter(f => f.id !== id));
+        }, 400);
+      }, i * 200);
+    });
+  }, [hand, cardW, cardH]);
 
   useEffect(() => {
     if (!initialState?.roomCode) { navigate('/'); return; }
 
-    socket.on('gameStateUpdate', (state: Omit<GameState, 'roomCode' | 'playerName'>) => {
+    socket.on('gameStateUpdate', (state: Omit<GameState, 'roomCode' | 'playerName'> & { effect?: string }) => {
+      if (state.effect) { setLastEffect(state.effect); setTimeout(() => setLastEffect(null), 2500); }
+
+      const newHand = assignCardIds(state.hand, prevHandRef.current);
+      const added = newHand.filter(c => !prevHandRef.current.some(p => p._id === c._id));
+
+      if (added.length > 0) {
+        // Queue cards to animate — positions will be measured in useLayoutEffect after render
+        pendingToAnimateRef.current = added.map(c => c._id);
+        setPendingIds(new Set(added.map(c => c._id)));
+      }
+
+      prevHandRef.current = newHand;
+      setHand(newHand);
+      setHiddenIds(new Set());
       setGame(prev => prev ? { ...state, roomCode: prev.roomCode, playerName: prev.playerName } : prev);
     });
 
-    socket.on('gameOver', ({ winnerName }: { winnerId: string; winnerName: string }) => {
-      setWinner(winnerName);
-    });
-
-    return () => {
-      socket.off('gameStateUpdate');
-      socket.off('gameOver');
-    };
+    socket.on('gameOver', ({ winnerName }: { winnerId: string; winnerName: string }) => setWinner(winnerName));
+    return () => { socket.off('gameStateUpdate'); socket.off('gameOver'); };
   }, [navigate, initialState?.roomCode]);
 
   if (!game) return null;
 
-  const isMyTurn = game.currentTurn === game.myId;
   const otherPlayers = game.players.filter(p => p.id !== game.myId);
+  const maxMiniCards = isMobile ? 5 : 7;
 
-  const handleCardClick = (card: UnoCard) => {
+  const handleCardClick = (card: ClientCard) => {
     if (!isMyTurn) return;
-    if (card.type === 'wild') {
-      setColorPickCard(card);
-    } else {
-      socket.emit('playCard', { roomCode: game.roomCode, card });
+    const cardEl = cardEls.current.get(card._id);
+    const discardEl = discardRef.current;
+    if (cardEl && discardEl) {
+      const cr = cardEl.getBoundingClientRect();
+      const dr = discardEl.getBoundingClientRect();
+      setHiddenIds(prev => new Set([...prev, card._id]));
+      setPlayFly({
+        card,
+        x: cr.left, y: cr.top,
+        toX: dr.left + dr.width / 2 - cardW / 2,
+        toY: dr.top + dr.height / 2 - cardH / 2,
+      });
     }
+    if (card.type === 'wild') setColorPickCard(card);
+    else socket.emit('playCard', { roomCode: game.roomCode, card });
   };
 
-  const handleColorPick = (color: string) => {
+  const handleWildColor = (color: string) => {
     if (!colorPickCard) return;
     socket.emit('playCard', { roomCode: game.roomCode, card: colorPickCard, chosenColor: color });
     setColorPickCard(null);
@@ -159,116 +198,298 @@ export default function GamePage() {
 
   return (
     <MantineProvider>
+      {/* Flying card overlays */}
+      <AnimatePresence>
+        {playFly && (
+          <motion.div
+            key='play-fly'
+            style={{ position: 'fixed', left: 0, top: 0, zIndex: 1000, pointerEvents: 'none', width: cardW, height: cardH }}
+            initial={{ x: playFly.x, y: playFly.y, rotate: 0, scale: 1 }}
+            animate={{ x: playFly.toX, y: playFly.toY, rotate: [0, -8, 4, 0], scale: [1, 1.1, 1.05, 1] }}
+            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+            transition={{ type: 'spring', stiffness: 220, damping: 22, duration: 0.4 }}
+            onAnimationComplete={() => setPlayFly(null)}
+          >
+            <UnoCardFace card={playFly.card} size={handCardSize} />
+          </motion.div>
+        )}
+        {drawFlies.map(fly => (
+          <motion.div
+            key={`draw-fly-${fly.id}`}
+            style={{ position: 'fixed', left: 0, top: 0, zIndex: 1000, pointerEvents: 'none', width: cardW, height: cardH }}
+            initial={{ x: fly.x, y: fly.y, rotate: 0 }}
+            animate={{ x: fly.toX, y: fly.toY, rotate: [0, 5, -3, 0] }}
+            transition={{ type: 'spring', stiffness: 200, damping: 22 }}
+          >
+            <CardBack size={handCardSize} />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      {/* Cyberpunk background */}
       <div style={{
-        display: 'flex', flexDirection: 'column',
-        height: '100vh', backgroundColor: '#166534',
-        fontFamily: 'sans-serif', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        background: '#07070f',
+        backgroundImage: [
+          'linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px)',
+          'linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px)',
+        ].join(', '),
+        backgroundSize: '44px 44px',
       }}>
 
         {/* Other players */}
-        <div style={{ padding: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div style={{ padding: isMobile ? '0.5rem' : '1rem 1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
           {otherPlayers.map(p => {
-            const isTheirTurn = game.currentTurn === p.id;
+            const active = game.currentTurn === p.id;
             return (
-              <div key={p.id} style={{
-                backgroundColor: isTheirTurn ? 'rgba(250,204,21,0.25)' : 'rgba(0,0,0,0.3)',
-                border: isTheirTurn ? '2px solid #fbbf24' : '2px solid transparent',
-                borderRadius: 12, padding: '0.5rem 1rem', textAlign: 'center', minWidth: 100,
-              }}>
-                <Text c='white' fw={700} size='sm'>{p.name}</Text>
-                <Group gap={4} justify='center' mt={4}>
-                  {Array.from({ length: Math.min(p.cardCount, 7) }).map((_, i) => (
-                    <CardBack key={i} size='sm' />
-                  ))}
-                  {p.cardCount > 7 && <Text c='white' size='xs'>+{p.cardCount - 7}</Text>}
+              <motion.div key={p.id}
+                animate={{
+                  background: active ? 'rgba(0,229,255,0.08)' : 'rgba(0,0,0,0.6)',
+                  borderColor: active ? '#00e5ff' : 'rgba(0,229,255,0.2)',
+                  boxShadow: active
+                    ? '0 0 12px rgba(0,229,255,0.5), inset 0 0 20px rgba(0,229,255,0.05)'
+                    : '0 0 0px transparent',
+                }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  border: '1px solid', borderRadius: 4,
+                  padding: isMobile ? '0.4rem 0.6rem' : '0.6rem 1.1rem',
+                  textAlign: 'center', minWidth: isMobile ? 80 : 110,
+                  clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
+                }}
+              >
+                <Group gap={4} justify='center' mb={4}>
+                  {active && (
+                    <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>
+                      <Text c='#00e5ff' size='xs' fw={900}>▶</Text>
+                    </motion.div>
+                  )}
+                  <Text c={active ? '#00ddff' : 'white'} fw={700} size={isMobile ? 'xs' : 'sm'}>{p.name}</Text>
                 </Group>
-                <Text c='dimmed' size='xs' mt={4}>{p.cardCount} cards</Text>
-              </div>
+                {(() => {
+                  const displayCount = Math.min(p.cardCount, maxMiniCards);
+                  const oppFan = computeFanLayout(displayCount, DIMS.sm.w, DIMS.sm.h, 160, Math.min(40, displayCount * 5), isMobile ? 140 : 200);
+                  return (
+                    <div style={{ position: 'relative', width: oppFan.containerW, height: oppFan.containerH, margin: '4px auto' }}>
+                      {oppFan.positions.map((pos, i) => (
+                        <div key={i} style={{ position: 'absolute', left: 0, top: 0, transform: `translate(${pos.x}px, ${pos.y}px) rotate(${pos.angle}deg)`, zIndex: i }}>
+                          <CardBack size='sm' />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {p.cardCount > maxMiniCards && <Text c='#00e5ff' size='xs' fw={900} ta='center'>+{p.cardCount - maxMiniCards}</Text>}
+                <Text c='rgba(0,229,255,0.5)' size='xs' mt={4} style={{ letterSpacing: '0.05em' }}>{p.cardCount} cards</Text>
+              </motion.div>
             );
           })}
         </div>
 
-        {/* Center: discard + draw pile */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3rem' }}>
-          <Stack align='center' gap='xs'>
-            <Text c='white' size='xs'>DISCARD</Text>
-            {game.topCard && <UnoCardView card={game.topCard} size='lg' />}
-          </Stack>
+        {/* Center play area */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem' }}>
+          {/* Poker felt table surface */}
+          <div style={{
+            position: 'relative',
+            width: isMobile ? '100%' : 'auto',
+            maxWidth: isMobile ? 380 : 560,
+            borderRadius: 24,
+            padding: isMobile ? '1.2rem 1.4rem' : '1.8rem 3rem',
+            background: 'radial-gradient(ellipse at 50% 30%, #0c2218 0%, #061410 60%, #030d0a 100%)',
+            border: '2px solid rgba(0,229,255,0.25)',
+            boxShadow: [
+              '0 0 0 1px rgba(0,229,255,0.08)',
+              '0 0 40px rgba(0,229,255,0.1)',
+              '0 8px 32px rgba(0,0,0,0.7)',
+              'inset 0 1px 0 rgba(255,255,255,0.04)',
+              'inset 0 0 60px rgba(0,229,255,0.03)',
+            ].join(', '),
+          }}>
+            {/* Felt texture overlay */}
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: 22, pointerEvents: 'none', opacity: 0.4,
+              backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 6px), repeating-linear-gradient(-45deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 6px)',
+            }} />
 
-          <Stack align='center' gap='xs'>
-            <Text c='white' size='xs'>DRAW ({game.deckCount})</Text>
-            <div onClick={isMyTurn ? handleDrawCard : undefined} style={{ cursor: isMyTurn ? 'pointer' : 'default' }}>
-              <CardBack size='lg' />
+            {/* Table edge highlight */}
+            <div style={{
+              position: 'absolute', inset: 3, borderRadius: 20, pointerEvents: 'none',
+              border: '1px solid rgba(255,255,255,0.03)',
+            }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '1.5rem' : '3rem', position: 'relative' }}>
+              {/* Discard pile */}
+              <Stack align='center' gap={6}>
+                <Text size='xs' fw={700} style={{ color: 'rgba(255,100,200,0.7)', letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: 10 }}>Discard</Text>
+                <div ref={discardRef} style={{ position: 'relative', width: centerCardW, height: centerCardH }}>
+                  <AnimatePresence mode='wait'>
+                    {game.topCard && (
+                      <motion.div
+                        key={`${game.topCard.color}-${game.topCard.value}-${game.deckCount}`}
+                        style={{ position: 'absolute', top: 0, left: 0 }}
+                        initial={{ scale: 0.6, rotate: -18, opacity: 0, y: -16 }}
+                        animate={{ scale: 1, rotate: 0, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.7, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+                      >
+                        <UnoCardFace card={game.topCard} size={centerCardSize} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </Stack>
+
+              {/* Divider */}
+              <div style={{ width: 1, height: isMobile ? 70 : 100, background: 'linear-gradient(180deg, transparent, rgba(0,229,255,0.2), transparent)', flexShrink: 0 }} />
+
+              {/* Draw pile */}
+              <Stack align='center' gap={6}>
+                <Text size='xs' fw={700} style={{ color: 'rgba(0,200,220,0.7)', letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: 10 }}>Draw</Text>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: 5, left: 4, width: centerCardW, height: centerCardH, borderRadius: 10, background: 'rgba(0,8,16,0.9)' }} />
+                  <div style={{ position: 'absolute', top: 2.5, left: 2, width: centerCardW, height: centerCardH, borderRadius: 10, background: 'rgba(0,8,16,0.95)' }} />
+                  <motion.div
+                    ref={drawRef}
+                    onClick={handleDrawCard}
+                    style={{ position: 'relative', cursor: isMyTurn ? 'pointer' : 'default' }}
+                    animate={isMyTurn
+                      ? { scale: [1, 1.06, 1], filter: ['brightness(1)', 'brightness(1.2)', 'brightness(1)'] }
+                      : { scale: 1, filter: 'brightness(0.9)' }}
+                    transition={isMyTurn ? { repeat: Infinity, duration: 1.6, ease: 'easeInOut' } : {}}
+                    whileTap={isMyTurn ? { scale: 0.93 } : {}}
+                  >
+                    <CardBack size={centerCardSize} />
+                  </motion.div>
+                </div>
+                <Text style={{ color: 'rgba(0,200,220,0.4)', fontSize: 10, letterSpacing: '0.08em' }}>{game.deckCount} left</Text>
+              </Stack>
             </div>
-          </Stack>
+          </div>
         </div>
 
-        {/* Turn indicator */}
-        <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-          <Text c={isMyTurn ? '#fbbf24' : 'rgba(255,255,255,0.6)'} fw={700} size='sm'>
-            {isMyTurn ? "Your turn — play a card or draw" : `${game.players.find(p => p.id === game.currentTurn)?.name}'s turn`}
-          </Text>
+        {/* Turn + effect banner */}
+        <div style={{ textAlign: 'center', padding: '0 1rem 0.6rem', minHeight: 52 }}>
+          <AnimatePresence mode='wait'>
+            {lastEffect ? (
+              <motion.div
+                key={lastEffect}
+                initial={{ y: -12, opacity: 0, scale: 0.9 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 8, opacity: 0, scale: 0.95 }}
+                style={{
+                  display: 'inline-block',
+                  background: 'rgba(255,0,212,0.1)',
+                  border: '1px solid rgba(255,0,212,0.5)',
+                  borderRadius: 2, padding: '5px 20px',
+                  boxShadow: '0 0 16px rgba(255,0,212,0.3)',
+                }}
+              >
+                <Text fw={700} size={isMobile ? 'sm' : 'md'} style={{ color: '#ff88ee', letterSpacing: '0.04em' }}>{lastEffect}</Text>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={game.currentTurn}
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+                style={{
+                  display: 'inline-block',
+                  background: isMyTurn ? 'rgba(0,229,255,0.08)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${isMyTurn ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: 2, padding: '5px 20px',
+                  boxShadow: isMyTurn ? '0 0 14px rgba(0,229,255,0.25)' : 'none',
+                }}
+              >
+                <Text fw={700} size='sm' style={{
+                  color: isMyTurn ? '#00ddff' : 'rgba(255,255,255,0.55)',
+                  fontFamily: isMyTurn ? "'Courier New', monospace" : 'inherit',
+                  letterSpacing: isMyTurn ? '0.04em' : '0.01em',
+                }}>
+                  {isMyTurn ? '> Your turn — play or draw_' : `${game.players.find(p => p.id === game.currentTurn)?.name}'s turn`}
+                </Text>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Your hand */}
-        <div style={{
-          backgroundColor: 'rgba(0,0,0,0.35)',
-          padding: '1rem',
-          display: 'flex', gap: '0.5rem',
-          overflowX: 'auto', justifyContent: 'center',
-        }}>
-          {game.hand.map((card, i) => {
-            const topCard = game.topCard;
-            const playable = isMyTurn && (
-              card.type === 'wild' ||
-              card.color === topCard?.color ||
-              card.value === topCard?.value
-            );
-            return (
-              <UnoCardView
-                key={i}
-                card={card}
-                onClick={playable ? () => handleCardClick(card) : undefined}
-                disabled={!playable}
-              />
-            );
-          })}
-        </div>
+        {/* Hand */}
+        {(() => {
+          const handFan = computeFanLayout(hand.length, cardW, cardH, isMobile ? 260 : 340, Math.min(50, hand.length * 5), screenW - 24);
+          return (
+            <motion.div
+              ref={handContainerRef}
+              animate={isMyTurn
+                ? { boxShadow: '0 -6px 40px rgba(0,229,255,0.2)', borderTopColor: 'rgba(0,229,255,0.4)' }
+                : { boxShadow: '0 -2px 12px rgba(0,0,0,0.6)', borderTopColor: 'rgba(0,229,255,0.1)' }}
+              transition={{ duration: 0.4 }}
+              style={{
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(7,7,15,0.95) 100%)',
+                backdropFilter: 'blur(10px)',
+                borderTop: '1px solid',
+                padding: isMobile ? '0.8rem 0.5rem 1rem' : '1.2rem 1rem 1.5rem',
+                display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+                minHeight: handFan.containerH + (isMobile ? 24 : 36),
+              }}
+            >
+              <div style={{ position: 'relative', width: handFan.containerW, height: handFan.containerH }}>
+                <AnimatePresence>
+                  {hand.map((card, i) => {
+                    const pos = handFan.positions[i];
+                    const playable = isMyTurn && (card.type === 'wild' || card.color === game.topCard?.color || card.value === game.topCard?.value);
+                    const isHidden = hiddenIds.has(card._id);
+                    const isPending = pendingIds.has(card._id);
+                    return (
+                      <motion.div
+                        key={card._id}
+                        ref={el => { if (el) cardEls.current.set(card._id, el); else cardEls.current.delete(card._id); }}
+                        style={{ position: 'absolute', left: 0, top: 0, zIndex: playable ? hand.length + i : i, cursor: playable ? 'pointer' : 'default' }}
+                        initial={{ x: pos.x, y: pos.y + 60, rotate: pos.angle, opacity: 0, scale: 0.85 }}
+                        animate={{
+                          x: pos.x,
+                          y: isHidden || isPending ? pos.y : playable ? pos.y - 20 : pos.y + 4,
+                          rotate: pos.angle,
+                          opacity: isHidden || isPending ? 0 : 1,
+                          scale: 1,
+                          filter: isHidden || isPending ? 'none' : playable ? 'brightness(1.05)' : 'brightness(0.38) saturate(0.25)',
+                        }}
+                        exit={{ y: pos.y - 100, scale: 1.15, opacity: 0, transition: { duration: 0.2 } }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+                        whileHover={playable ? { y: pos.y - 44, scale: 1.12, zIndex: 200, filter: 'brightness(1.2) saturate(1.3)' } : {}}
+                        whileTap={playable ? { scale: 0.95 } : {}}
+                        onClick={playable ? () => handleCardClick(card) : undefined}
+                      >
+                        <UnoCardFace card={card} size={handCardSize} />
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          );
+        })()}
 
-        {/* Wild color picker */}
-        <Modal
-          opened={!!colorPickCard}
-          onClose={() => setColorPickCard(null)}
-          title='Choose a color'
-          centered
-          size='sm'
+        {/* Wild picker */}
+        <Modal opened={!!colorPickCard} onClose={() => setColorPickCard(null)} title='// CHOOSE COLOR' centered size='sm'
+          styles={{ header: { background: '#0d0d1f', borderBottom: '1px solid rgba(0,229,255,0.2)' }, content: { background: '#0d0d1f', border: '1px solid rgba(0,229,255,0.3)', boxShadow: '0 0 40px rgba(0,229,255,0.15)' }, title: { color: '#00e5ff', fontFamily: 'monospace', letterSpacing: '0.1em' } }}
         >
           <Group justify='center' gap='md' p='md'>
             {WILD_COLORS.map(color => (
-              <div
-                key={color}
-                onClick={() => handleColorPick(color)}
-                style={{
-                  width: 64, height: 64,
-                  backgroundColor: CARD_COLORS[color],
-                  borderRadius: 12, cursor: 'pointer',
-                  border: '3px solid white',
-                  transition: 'transform 0.1s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.1)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
+              <motion.div key={color} onClick={() => handleWildColor(color)}
+                whileHover={{ scale: 1.15, boxShadow: `0 0 24px ${CARD_COLORS[color]}` }}
+                whileTap={{ scale: 0.95 }}
+                style={{ width: isMobile ? 52 : 64, height: isMobile ? 52 : 64, backgroundColor: CARD_COLORS[color], borderRadius: 4, cursor: 'pointer', border: '2px solid rgba(255,255,255,0.6)', boxShadow: `0 0 12px ${CARD_COLORS[color]}88`, clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }}
               />
             ))}
           </Group>
         </Modal>
 
-        {/* Game over modal */}
-        <Modal opened={!!winner} onClose={() => {}} title='Game Over' centered withCloseButton={false}>
+        {/* Game over */}
+        <Modal opened={!!winner} onClose={() => {}} title='// GAME OVER' centered withCloseButton={false}
+          styles={{ header: { background: '#0d0d1f', borderBottom: '1px solid rgba(255,0,212,0.3)' }, content: { background: '#0d0d1f', border: '1px solid rgba(255,0,212,0.4)', boxShadow: '0 0 60px rgba(255,0,212,0.2)' }, title: { color: '#ff00d4', fontFamily: 'monospace', letterSpacing: '0.1em' } }}
+        >
           <Stack align='center' p='md' gap='md'>
-            <Title order={2}>🎉 {winner} wins!</Title>
-            <Button onClick={() => navigate('/')} variant='gradient' gradient={{ from: 'blue', to: 'cyan' }}>
-              Back to Home
-            </Button>
+            <Text fw={900} size='xl' style={{ color: '#00e5ff', letterSpacing: '0.1em', textShadow: '0 0 20px #00e5ff' }}>{winner?.toUpperCase()} WINS</Text>
+            <Button onClick={() => navigate('/')} variant='outline' color='cyan' style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>[ BACK TO MENU ]</Button>
           </Stack>
         </Modal>
       </div>

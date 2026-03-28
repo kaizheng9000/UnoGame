@@ -1,19 +1,15 @@
+import type { UnoCard } from '../../shared/types';
 
-
-export interface UnoCard{
-  color: string;
-  value: number | string;
-  type: 'number' | 'action' | 'wild';
-}
+export type { UnoCard };
 
 class UnoDeck {
   cards: UnoCard[];
+
   constructor() {
     this.cards = this.#generateDeck();
     this.#shuffle();
   }
 
-  /** Creates all cards in a standard uno deck */
   #generateDeck() {
     const colors = ['red', 'blue', 'green', 'yellow'];
     const specialCards = ['skip', 'reverse', 'draw two'];
@@ -41,15 +37,14 @@ class UnoDeck {
     return deck;
   }
 
-  /** Shuffles this deck using Fisher-Yates algorithm */
   #shuffle() {
     for (let i = this.cards.length - 1; i > 0; i--) {
-      let j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(Math.random() * (i + 1));
       [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
     }
   }
 
-  drawCard(): UnoCard | undefined{
+  drawCard(): UnoCard | undefined {
     return this.cards.pop();
   }
 }

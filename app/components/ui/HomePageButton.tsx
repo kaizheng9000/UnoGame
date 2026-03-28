@@ -1,10 +1,12 @@
 import { Button } from '@mantine/core';
 
-export function HomePageButton({
-  buttonName,
-  icon,
-  onClick = () => {},
-}: Props) {
+interface Props {
+  buttonName: string;
+  onClick?: () => void;
+  icon?: React.ReactNode;
+}
+
+export function HomePageButton({ buttonName, icon, onClick = () => {} }: Props) {
   return (
     <Button
       className='button'
@@ -20,10 +22,4 @@ export function HomePageButton({
       {buttonName}
     </Button>
   );
-}
-
-interface Props {
-  buttonName: string;
-  onClick?: () => void;
-  icon?: React.ReactNode;
 }

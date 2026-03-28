@@ -8,7 +8,9 @@
 .homePageButtons {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem; /* equivalent to gap-6 */
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 360px;
 }
 
 .button:hover {
@@ -26,8 +28,10 @@
   justify-content: center;
   min-height: 100vh;
   margin: 0;
+  padding: 1rem;
   font-family: sans-serif;
   background-color: #252533;
+  box-sizing: border-box;
 }
 
 .headerButtons {
@@ -68,9 +72,10 @@
 
 .logoContainer {
   position: relative;
-  max-width: 24rem; /* max-w-sm = 384px */
-  border-radius: 0.5rem; /* rounded-lg ≈ 8px */
+  width: 100%;
+  max-width: min(24rem, 90vw);
+  border-radius: 0.5rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
   border: 4px solid white;
 }
