@@ -1,28 +1,58 @@
 // This needs to be the home page
 
 import { Users, UserPlus, HelpCircle, Settings } from 'lucide-react';
-import { Button, MantineProvider, Text, TextInput, Group } from '@mantine/core';
+import { Button, MantineProvider, Text } from '@mantine/core';
 import { HomePageButton } from '~/components/homePageButtons';
 import '../css/index.css';
 import { BaseModal } from '~/components/baseModal';
-import { BaseForm } from '~/components/baseForrm';
+import { BaseForm } from '~/components/baseForm';
 import { useNavigate } from '@remix-run/react';
 import socket from '../../backend/socket';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const pendingValues = useRef<Record<string, string> | null>(null);
+  const [connected, setConnected] = useState(socket.connected);
 
-  const handleCreateRoom = (values: Record<string, string>) => {
-    console.log('Creating room with values:', values);
+  useEffect(() => {
+    socket.on('connect', () => setConnected(true));
+    socket.on('disconnect', () => setConnected(false));
 
-    // Post to the backend?
-    socket.emit('createRoom', {
-      roomCode: values.roomCode,
-      player: values.playerName,
+    socket.on('joinedRoom', ({ roomCode, isHost, roomName, maxPlayers, players }: { roomCode: string; isHost: boolean; roomName: string; maxPlayers: number; players: { id: string; name: string }[] }) => {
+      navigate('/waitingRoom', {
+        state: { roomCode, isHost, playerName: pendingValues.current?.playerName, roomName, maxPlayers, players },
+      });
     });
 
-    // navigate(`/waitingRoom`);
+    socket.on('roomError', (message: string) => {
+      alert(message);
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('joinedRoom');
+      socket.off('roomError');
+    };
+  }, [navigate]);
+
+  const handleCreateRoom = (values: Record<string, string>) => {
+    pendingValues.current = values;
+    socket.emit('createRoom', {
+      roomCode: values.roomCode,
+      playerName: values.playerName,
+      roomName: values.roomName,
+      maxPlayers: values.maxPlayers,
+    });
+  };
+
+  const handleJoinRoom = (values: Record<string, string>) => {
+    pendingValues.current = values;
+    socket.emit('joinRoom', {
+      roomCode: values.roomCode,
+      playerName: values.playerName,
+    });
   };
 
   return (
@@ -30,6 +60,9 @@ export default function HomePage() {
       <div className='homePage'>
         {/* Header for settings and help */}
         <div className='headerButtons'>
+          <Text size='xs' c={connected ? 'teal' : 'red'}>
+            {connected ? '● Connected' : '● Disconnected'}
+          </Text>
           <Button variant='subtle' color='gray' radius='xl' p={8}>
             <HelpCircle size={24} />
           </Button>
@@ -61,7 +94,7 @@ export default function HomePage() {
             icon={<Users size={28} />}
           >
             <BaseForm
-              // this should be a method to get
+              onSubmit={handleJoinRoom}
               submitLabel='Join'
               fields={[
                 {
@@ -86,8 +119,6 @@ export default function HomePage() {
             icon={<UserPlus size={28} />}
           >
             <BaseForm
-              method='post'
-              action='/create-room'
               onSubmit={handleCreateRoom}
               submitLabel='Create'
               fields={[

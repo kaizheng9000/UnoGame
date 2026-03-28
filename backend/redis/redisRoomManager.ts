@@ -1,5 +1,4 @@
 import Player from 'backend/models/player';
-import UnoRoom from 'backend/models/unoRoom';
 import Redis from 'ioredis';
 
 export class RedisRoomManager {
@@ -18,6 +17,7 @@ export class RedisRoomManager {
       .srem('uno:rooms', roomCode)
       .del(`uno:room:${roomCode}:players`)
       .del(`uno:room:${roomCode}:state`)
+      .del(`uno:room:${roomCode}:info`)
       .exec();
   }
 
@@ -42,11 +42,11 @@ export class RedisRoomManager {
     return raw.map(p => JSON.parse(p));
   }
 
-  async saveGameState(roomCode: string, state: UnoRoom): Promise<void> {
+  async saveGameState(roomCode: string, state: Record<string, unknown>): Promise<void> {
     await this.redis.set(`uno:room:${roomCode}:state`, JSON.stringify(state));
   }
 
-  async getGameState(roomCode: string): Promise<UnoRoom | null> {
+  async getGameState(roomCode: string): Promise<Record<string, unknown> | null> {
     const raw = await this.redis.get(`uno:room:${roomCode}:state`);
     return raw ? JSON.parse(raw) : null;
   }
@@ -58,5 +58,14 @@ export class RedisRoomManager {
 
   async getAllRooms(): Promise<string[]> {
     return await this.redis.smembers('uno:rooms');
+  }
+
+  async setRoomInfo(roomCode: string, info: { roomName: string; maxPlayers: number }): Promise<void> {
+    await this.redis.set(`uno:room:${roomCode}:info`, JSON.stringify(info));
+  }
+
+  async getRoomInfo(roomCode: string): Promise<{ roomName: string; maxPlayers: number } | null> {
+    const raw = await this.redis.get(`uno:room:${roomCode}:info`);
+    return raw ? JSON.parse(raw) : null;
   }
 }
