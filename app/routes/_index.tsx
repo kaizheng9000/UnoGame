@@ -1,6 +1,6 @@
 // This needs to be the home page
 
-import { Users, UserPlus, HelpCircle, Settings } from 'lucide-react';
+import { Users, UserPlus, Bot, HelpCircle, Settings } from 'lucide-react';
 import { Button, MantineProvider, Text } from '@mantine/core';
 import '../css/index.css';
 import { BaseModal } from '~/components/ui/BaseModal';
@@ -43,6 +43,12 @@ export default function HomePage() {
       },
     );
 
+    socket.on('gameStarted', (state: Record<string, unknown>) => {
+      navigate('/game', {
+        state: { ...state, playerName: pendingValues.current?.playerName },
+      });
+    });
+
     socket.on('roomError', (message: string) => {
       alert(message);
     });
@@ -51,6 +57,7 @@ export default function HomePage() {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('joinedRoom');
+      socket.off('gameStarted');
       socket.off('roomError');
     };
   }, [navigate]);
@@ -60,6 +67,14 @@ export default function HomePage() {
     socket.emit('createRoom', {
       playerName: values.playerName,
       maxPlayers: values.maxPlayers,
+    });
+  };
+
+  const handleSinglePlayer = (values: Record<string, string>) => {
+    pendingValues.current = values;
+    socket.emit('createSinglePlayerRoom', {
+      playerName: values.playerName,
+      botCount: parseInt(values.botCount),
     });
   };
 
@@ -104,6 +119,33 @@ export default function HomePage() {
 
         {/* Join and Create room buttons */}
         <div className='homePageButtons'>
+          <BaseModal
+            title='Single Player'
+            buttonName='Single Player'
+            icon={<Bot size={28} />}
+          >
+            <BaseForm
+              onSubmit={handleSinglePlayer}
+              submitLabel='Play'
+              fields={[
+                {
+                  name: 'playerName',
+                  label: 'Your Name',
+                  placeholder: 'Enter the name you want displayed',
+                  required: true,
+                },
+                {
+                  name: 'botCount',
+                  label: 'Number of Bots',
+                  type: 'select',
+                  data: ['1', '2', '3', '4', '5', '6', '7'],
+                  required: true,
+                  defaultValue: '1',
+                },
+              ]}
+            />
+          </BaseModal>
+
           <BaseModal
             title='Join Information'
             buttonName='Join Room'
