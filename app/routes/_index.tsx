@@ -18,11 +18,30 @@ export default function HomePage() {
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
 
-    socket.on('joinedRoom', ({ roomCode, isHost, maxPlayers, players }: { roomCode: string; isHost: boolean; maxPlayers: number; players: { id: string; name: string }[] }) => {
-      navigate('/waitingRoom', {
-        state: { roomCode, isHost, playerName: pendingValues.current?.playerName, maxPlayers, players },
-      });
-    });
+    socket.on(
+      'joinedRoom',
+      ({
+        roomCode,
+        isHost,
+        maxPlayers,
+        players,
+      }: {
+        roomCode: string;
+        isHost: boolean;
+        maxPlayers: number;
+        players: { id: string; name: string }[];
+      }) => {
+        navigate('/waitingRoom', {
+          state: {
+            roomCode,
+            isHost,
+            playerName: pendingValues.current?.playerName,
+            maxPlayers,
+            players,
+          },
+        });
+      },
+    );
 
     socket.on('roomError', (message: string) => {
       alert(message);
@@ -131,6 +150,7 @@ export default function HomePage() {
                   type: 'select',
                   data: ['2', '3', '4', '5', '6', '7', '8'],
                   required: true,
+                  defaultValue: '2',
                 },
               ]}
             ></BaseForm>

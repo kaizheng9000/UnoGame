@@ -95,18 +95,20 @@ export default function GamePage() {
 
   const isMyTurn = game ? game.currentTurn === game.myId : false;
 
-  // Auto-draw when no playable cards
+  // Auto-draw when no playable cards.
+  // Depends on currentTurn (not just isMyTurn) so it re-fires even when the same
+  // player gets two consecutive turns (e.g. skip/reverse in a 2-player game).
   useEffect(() => {
     if (!isMyTurn) return;
     const timer = setTimeout(() => {
       const g = gameRef.current;
       const h = handRef.current;
-      if (!g) return;
+      if (!g || g.currentTurn !== g.myId) return;
       const hasPlayable = h.some(c => c.type === 'wild' || c.color === g.topCard?.color || c.value === g.topCard?.value);
       if (!hasPlayable) socket.emit('drawCard', { roomCode: g.roomCode });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [isMyTurn]);
+  }, [game?.currentTurn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // After hand updates with new pending cards, measure their DOM positions and start fly animations.
   // useLayoutEffect fires after DOM mutations but before paint, so cardEls refs are already populated.

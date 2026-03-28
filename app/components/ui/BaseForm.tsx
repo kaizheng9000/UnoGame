@@ -8,6 +8,7 @@ interface FieldsConfig {
   type?: 'text' | 'select';
   required?: boolean;
   data?: string[];
+  defaultValue?: string;
 }
 
 interface Props {
@@ -28,11 +29,15 @@ export function BaseForm({
   action,
 }: Props) {
   const initialValues = fields.reduce((acc, field) => {
-    acc[field.name] = '';
+    acc[field.name] = field.defaultValue ?? '';
     return acc;
   }, {} as Record<string, string>);
 
-  const form = useForm({ mode: 'uncontrolled', initialValues, validate: validation });
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues,
+    validate: validation,
+  });
 
   return (
     <form method={method} action={action} onSubmit={form.onSubmit(onSubmit)}>
