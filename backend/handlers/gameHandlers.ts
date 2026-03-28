@@ -30,39 +30,69 @@ function getNextIndex(currentId: string, players: { id: string }[], direction: 1
   return ((current + step) % players.length + players.length) % players.length;
 }
 
+// Module-level: tracks rematch state across all sockets
+const rematchVotes = new Map<string, Set<string>>();   // playerIds who clicked Play Again
+const rematchLeavers = new Map<string, Set<string>>(); // playerIds who clicked Leave
+
+function checkRematchReady(io: Server, roomCode: string, allPlayers: { id: string; name: string }[]) {
+  const voters = rematchVotes.get(roomCode) ?? new Set<string>();
+  const leavers = rematchLeavers.get(roomCode) ?? new Set<string>();
+  const eligible = allPlayers.filter(p => !leavers.has(p.id));
+  const votes = eligible.filter(p => voters.has(p.id)).length;
+  const total = eligible.length;
+
+  io.to(roomCode).emit('rematchStatus', { votes, total });
+
+  if (total < 2) {
+    // Not enough players left to play — tell the last remaining player
+    eligible.forEach(p => {
+      io.sockets.sockets.get(p.id)?.emit('rematchCancelled');
+    });
+    rematchVotes.delete(roomCode);
+    rematchLeavers.delete(roomCode);
+    return false;
+  }
+  if (votes >= total) return true; // everyone eligible has voted
+  return false;
+}
+
+async function startNewGame(io: Server, roomCode: string, roomManager: RedisRoomManager, playerIds?: string[]) {
+  const allPlayers = await roomManager.getPlayers(roomCode);
+  const players = playerIds ? allPlayers.filter(p => playerIds.includes(p.id)) : allPlayers;
+  const deck = new UnoDeck();
+  const hands: Record<string, UnoCard[]> = {};
+
+  for (const player of players) {
+    hands[player.id] = [];
+    for (let i = 0; i < 7; i++) {
+      const card = deck.drawCard();
+      if (card) hands[player.id].push(card);
+    }
+  }
+
+  let topCard = deck.drawCard();
+  while (topCard && topCard.type === 'wild') {
+    deck.cards.unshift(topCard);
+    topCard = deck.drawCard();
+  }
+
+  const gameState: FullGameState = {
+    deckCards: deck.cards,
+    discardPile: topCard ? [topCard] : [],
+    currentTurn: players[0].id,
+    players: players.map(p => ({ id: p.id, name: p.name })),
+    hands,
+    direction: 1,
+  };
+
+  await roomManager.saveGameState(roomCode, gameState as unknown as Record<string, unknown>);
+  return { gameState, deck, hands, players };
+}
+
 export function registerGameHandlers(io: Server, socket: Socket, roomManager: RedisRoomManager) {
   socket.on('startGame', async ({ roomCode }: { roomCode: string }) => {
     try {
-      const players = await roomManager.getPlayers(roomCode);
-      const deck = new UnoDeck();
-      const hands: Record<string, UnoCard[]> = {};
-
-      for (const player of players) {
-        hands[player.id] = [];
-        for (let i = 0; i < 7; i++) {
-          const card = deck.drawCard();
-          if (card) hands[player.id].push(card);
-        }
-      }
-
-      // First card can't be a wild
-      let topCard = deck.drawCard();
-      while (topCard && topCard.type === 'wild') {
-        deck.cards.unshift(topCard);
-        topCard = deck.drawCard();
-      }
-
-      const gameState: FullGameState = {
-        deckCards: deck.cards,
-        discardPile: topCard ? [topCard] : [],
-        currentTurn: players[0].id,
-        players: players.map(p => ({ id: p.id, name: p.name })),
-        hands,
-        direction: 1,
-      };
-
-      await roomManager.saveGameState(roomCode, gameState as unknown as Record<string, unknown>);
-
+      const { gameState, players, hands } = await startNewGame(io, roomCode, roomManager);
       for (const player of players) {
         const playerSocket = io.sockets.sockets.get(player.id);
         if (playerSocket) {
@@ -70,7 +100,7 @@ export function registerGameHandlers(io: Server, socket: Socket, roomManager: Re
             hand: hands[player.id],
             topCard: gameState.discardPile[gameState.discardPile.length - 1],
             currentTurn: gameState.currentTurn,
-            deckCount: deck.cards.length,
+            deckCount: gameState.deckCards.length,
             players: players.map(p => ({ id: p.id, name: p.name, cardCount: hands[p.id].length })),
             myId: player.id,
             roomCode,
@@ -80,6 +110,67 @@ export function registerGameHandlers(io: Server, socket: Socket, roomManager: Re
     } catch (err) {
       console.error('startGame error:', err);
       socket.emit('roomError', 'Failed to start game');
+    }
+  });
+
+  socket.on('rematch', async ({ roomCode }: { roomCode: string }) => {
+    try {
+      const rawState = await roomManager.getGameState(roomCode) as unknown as FullGameState | null;
+      if (!rawState) return;
+
+      if (!rematchVotes.has(roomCode)) rematchVotes.set(roomCode, new Set());
+      rematchVotes.get(roomCode)!.add(socket.id);
+
+      const ready = checkRematchReady(io, roomCode, rawState.players);
+      if (ready) {
+        const voterIds = [...rematchVotes.get(roomCode)!];
+        rematchVotes.delete(roomCode);
+        rematchLeavers.delete(roomCode);
+        const { gameState, players, hands } = await startNewGame(io, roomCode, roomManager, voterIds);
+        for (const player of players) {
+          io.sockets.sockets.get(player.id)?.emit('rematchStarted', {
+            hand: hands[player.id],
+            topCard: gameState.discardPile[gameState.discardPile.length - 1],
+            currentTurn: gameState.currentTurn,
+            deckCount: gameState.deckCards.length,
+            players: players.map(p => ({ id: p.id, name: p.name, cardCount: hands[p.id].length })),
+            myId: player.id,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('rematch error:', err);
+    }
+  });
+
+  socket.on('leaveRematch', async ({ roomCode }: { roomCode: string }) => {
+    try {
+      const rawState = await roomManager.getGameState(roomCode) as unknown as FullGameState | null;
+      if (!rawState) return;
+
+      if (!rematchLeavers.has(roomCode)) rematchLeavers.set(roomCode, new Set());
+      rematchLeavers.get(roomCode)!.add(socket.id);
+      rematchVotes.get(roomCode)?.delete(socket.id);
+
+      const ready = checkRematchReady(io, roomCode, rawState.players);
+      if (ready) {
+        const voterIds = [...rematchVotes.get(roomCode)!];
+        rematchVotes.delete(roomCode);
+        rematchLeavers.delete(roomCode);
+        const { gameState, players, hands } = await startNewGame(io, roomCode, roomManager, voterIds);
+        for (const player of players) {
+          io.sockets.sockets.get(player.id)?.emit('rematchStarted', {
+            hand: hands[player.id],
+            topCard: gameState.discardPile[gameState.discardPile.length - 1],
+            currentTurn: gameState.currentTurn,
+            deckCount: gameState.deckCards.length,
+            players: players.map(p => ({ id: p.id, name: p.name, cardCount: hands[p.id].length })),
+            myId: player.id,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('leaveRematch error:', err);
     }
   });
 
@@ -105,7 +196,8 @@ export function registerGameHandlers(io: Server, socket: Socket, roomManager: Re
           winnerId: socket.id,
           winnerName: gameState.players.find(p => p.id === socket.id)?.name,
         });
-        await roomManager.deleteRoom(roomCode);
+        // Keep room alive for rematch (5 min TTL), clear game state so votes can be tracked
+        await roomManager.saveGameState(roomCode, gameState as unknown as Record<string, unknown>);
         return;
       }
 

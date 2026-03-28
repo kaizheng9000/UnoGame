@@ -84,6 +84,8 @@ export default function GamePage() {
   const [colorPickCard, setColorPickCard] = useState<UnoCard | null>(null);
   const [winner, setWinner] = useState<string | null>(null);
   const [lastEffect, setLastEffect] = useState<string | null>(null);
+  const [rematchVotes, setRematchVotes] = useState<{ votes: number; total: number } | null>(null);
+  const [hasVotedRematch, setHasVotedRematch] = useState(false);
 
   // DOM refs
   const discardRef = useRef<HTMLDivElement>(null);
@@ -158,7 +160,35 @@ export default function GamePage() {
     });
 
     socket.on('gameOver', ({ winnerName }: { winnerId: string; winnerName: string }) => setWinner(winnerName));
-    return () => { socket.off('gameStateUpdate'); socket.off('gameOver'); };
+
+    socket.on('rematchStatus', ({ votes, total }: { votes: number; total: number }) => {
+      setRematchVotes({ votes, total });
+    });
+
+    socket.on('rematchCancelled', () => navigate('/'));
+
+    socket.on('rematchStarted', (newState: Omit<GameState, 'roomCode' | 'playerName'>) => {
+      const newHand = newState.hand.map(c => ({ ...c, _id: Math.random().toString(36).slice(2) }));
+      prevHandRef.current = newHand;
+      setHand(newHand);
+      setGame(prev => prev ? { ...newState, roomCode: prev.roomCode, playerName: prev.playerName } : prev);
+      setWinner(null);
+      setLastEffect(null);
+      setRematchVotes(null);
+      setHasVotedRematch(false);
+      setPlayFly(null);
+      setDrawFlies([]);
+      setPendingIds(new Set());
+      setHiddenIds(new Set());
+    });
+
+    return () => {
+      socket.off('gameStateUpdate');
+      socket.off('gameOver');
+      socket.off('rematchStatus');
+      socket.off('rematchCancelled');
+      socket.off('rematchStarted');
+    };
   }, [navigate, initialState?.roomCode]);
 
   if (!game) return null;
@@ -489,7 +519,35 @@ export default function GamePage() {
         >
           <Stack align='center' p='md' gap='md'>
             <Text fw={900} size='xl' style={{ color: '#00e5ff', letterSpacing: '0.1em', textShadow: '0 0 20px #00e5ff' }}>{winner?.toUpperCase()} WINS</Text>
-            <Button onClick={() => navigate('/')} variant='outline' color='cyan' style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>[ BACK TO MENU ]</Button>
+            <Button
+              onClick={() => {
+                if (hasVotedRematch || !game) return;
+                setHasVotedRematch(true);
+                socket.emit('rematch', { roomCode: game.roomCode });
+              }}
+              disabled={hasVotedRematch}
+              variant='outline'
+              color='cyan'
+              style={{ fontFamily: 'monospace', letterSpacing: '0.1em', minWidth: 180 }}
+            >
+              {hasVotedRematch
+                ? rematchVotes ? `Ready — ${rematchVotes.votes}/${rematchVotes.total} want to play` : 'Ready…'
+                : '[ PLAY AGAIN ]'}
+            </Button>
+            {!hasVotedRematch && rematchVotes && (
+              <Text size='xs' style={{ color: 'rgba(0,229,255,0.5)', letterSpacing: '0.04em' }}>
+                {rematchVotes.votes}/{rematchVotes.total} want to play again
+              </Text>
+            )}
+            <Button
+              onClick={() => {
+                if (game) socket.emit('leaveRematch', { roomCode: game.roomCode });
+                navigate('/');
+              }}
+              variant='subtle' color='gray' size='xs' style={{ letterSpacing: '0.05em' }}
+            >
+              Leave
+            </Button>
           </Stack>
         </Modal>
       </div>
